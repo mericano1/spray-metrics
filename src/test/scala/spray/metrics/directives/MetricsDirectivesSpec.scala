@@ -16,21 +16,17 @@
 
 package spray.metrics.directives
 
-import akka.actor.ActorSystem
-import org.specs2.mutable.Specification
-import org.specs2.specification.Scope
-import shapeless._
+import com.codahale.metrics.MetricRegistry
+import org.scalatest.WordSpec
 import spray.http.StatusCode
 import spray.http.StatusCodes._
 import spray.routing._
-import spray.routing.directives._
-import spray.testkit.Specs2RouteTest
-
-import com.codahale.metrics.MetricRegistry
+import spray.testkit.ScalatestRouteTest
 
 object MetricsDirectivesSpec {
-  trait RoutableMetrics extends Scope with Directives {
-    import spray.routing.PathMatcher._
+
+  trait RoutableMetrics extends Directives {
+
     val metricRegistry = new MetricRegistry()
     val metricFactory = CodaHaleMetricsDirectiveFactory(metricRegistry)
 
@@ -68,24 +64,28 @@ object MetricsDirectivesSpec {
 
     // Counter Routes
     def successCounter(uri: Boolean = false) = buildCase(OK, "200", counter.count, counterByUri.count, false, uri)
+
     def failureCounter(uri: Boolean = false) = buildCase(InternalServerError,
       "500",
       counter.failures.count,
       counterByUri.failures.count,
       false,
       uri)
+
     def rejectionCounter(uri: Boolean = false) = buildCase(OK,
       "reject",
       counter.rejections.count,
       counterByUri.rejections.count,
       false,
       uri)
+
     def exceptionCounter(uri: Boolean = false) = buildCase(OK,
       "throw",
       counter.exceptions.count,
       counterByUri.exceptions.count,
       true,
       uri)
+
     def allCounter(uri: Boolean = false) = {
       val directive = if (!uri) counter.all.count else counterByUri.all.count
       buildCase(OK, "200", counter.all.count, counterByUri.all.count, false, uri) ~
@@ -96,21 +96,29 @@ object MetricsDirectivesSpec {
 
     // Timer Routes
     def successTimer(uri: Boolean = false) = buildCase(OK, "200", timer.time, timerByUri.time, false, uri)
+
     def failureTimer(uri: Boolean = false) = buildCase(InternalServerError, "500", timer.time, timerByUri.time, false, uri)
+
     def rejectionTimer(uri: Boolean = false) = buildCase(OK, "reject", timer.time, timerByUri.time, false, uri)
+
     def exceptionTimer(uri: Boolean = false) = buildCase(OK, "throw", timer.time, timerByUri.time, true, uri)
 
     // Meter Routes
     def successMeter(uri: Boolean = false) = buildCase(OK, "200", meter.meter, meterByUri.meter, false, uri)
+
     def failureMeter(uri: Boolean = false) = buildCase(InternalServerError, "500", meter.meter, meterByUri.meter, false, uri)
+
     def rejectionMeter(uri: Boolean = false) = buildCase(OK, "reject", meter.meter, meterByUri.meter, false, uri)
+
     def exceptionMeter(uri: Boolean = false) = buildCase(OK, "throw", meter.meter, meterByUri.meter, true, uri)
 
     val route: Route
   }
+
 }
 
-class MetricsDirectivesSpec extends Specification with Specs2RouteTest {
+class MetricsDirectivesSpec extends WordSpec with ScalatestRouteTest {
+
   import MetricsDirectivesSpec._
 
   // Assertions
@@ -120,10 +128,12 @@ class MetricsDirectivesSpec extends Specification with Specs2RouteTest {
     metricRegistry.counter(s"$prefix.rejections").getCount() === rejections
     metricRegistry.counter(s"$prefix.exceptions").getCount() === exceptions
   }
+
   def assertTimer(timerName: String, metricRegistry: MetricRegistry) = {
     metricRegistry.timer(timerName).getCount() === (1)
     metricRegistry.timer(timerName).getMeanRate() !== (0.0)
   }
+
   def assertMeter(meterName: String, metricRegistry: MetricRegistry) = {
     metricRegistry.meter(meterName).getCount() === (1)
     metricRegistry.meter(meterName).getMeanRate() !== (0.0)
@@ -328,4 +338,5 @@ class MetricsDirectivesSpec extends Specification with Specs2RouteTest {
     }
   }
 }
+
 // vim:fdl=1:

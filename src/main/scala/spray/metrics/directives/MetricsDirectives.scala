@@ -18,13 +18,13 @@ package spray.metrics
 package directives
 
 import akka.actor.Status.Failure
+import com.codahale.metrics.{MetricRegistry, Timer}
+import spray.http.HttpResponse
+import spray.routing.directives.BasicDirectives
+import spray.routing.{Directive0, Rejected, RequestContext}
 
 import scala.util.control.NonFatal
 
-import spray.http.HttpResponse
-import spray.routing.{ Directive0, Rejected, RequestContext }
-
-import com.codahale.metrics.{ MetricRegistry, Timer }
 
 /**
  * Provides helper methods for metrics.
@@ -45,6 +45,14 @@ object MetricHelpers {
     val routeName = ctx.request.uri.toString.drop(1).replaceAll("/", ".")
     routeName + "." + methodName
   }
+
+  def around(before: RequestContext ⇒ (RequestContext, Any ⇒ Any)): Directive0 =
+    BasicDirectives.mapInnerRoute { inner ⇒
+      ctx ⇒
+        val (ctxForInnerRoute, after) = before(ctx)
+        try inner(ctxForInnerRoute.withRouteResponseMapped(after))
+        catch { case NonFatal(ex) ⇒ after(Failure(ex)) }
+    }
 }
 
 /**
@@ -109,7 +117,8 @@ sealed trait CounterBase {
   // The incrementer for the counter that counts successful metrics
   val handleSuccesses: CountIncrementer
 
-  /**
+
+    /**
    * The [[spray.routing.BasicDirectives#around]] directive requires that the
    * caller return a function that will process what happens <i>after</i> the
    * specific [[spray.routing.Route]] completes.  This method builds that
@@ -156,16 +165,16 @@ sealed trait CounterBase {
  *   The instance of the MetricRegistry that holds the counter metric.
  * @param handleFailures
  *   A function that will increment `{prefix}.failures`. Defaults to
- *   [[CountIncrementer.nilIncrementer]].
+ *   [[spray.metrics.directives.CounterMetric.CountIncrementer.nilIncrementer]].
  * @param handleRejections
  *   A function that will increment `{prefix}.rejections`. Defaults to
- *   [[CountIncrementer.nilIncrementer]].
+ *   [[spray.metrics.directives.CounterMetric.CountIncrementer.nilIncrementer]].
  * @param handleExceptions
  *   A function that will increment `{prefix}.exceptions`. Defaults to
- *   [[CountIncrementer.nilIncrementer]].
+ *   [[spray.metrics.directives.CounterMetric.CountIncrementer.nilIncrementer]].
  * @param handleSuccesses
  *   A function that will increment `{prefix}.successes`. Defaults to
- *   [[CountIncrementer.incSuccesses]].
+ *   [[spray.metrics.directives.CounterMetric.CountIncrementer.incSuccesses]].
  */
 case class CounterMetric(
     prefix: String,
@@ -176,7 +185,7 @@ case class CounterMetric(
     handleSuccesses: CounterMetric.CountIncrementer = CounterMetric.incSuccesses) extends CounterBase {
 
   import CounterMetric._
-  import spray.routing.directives.BasicDirectives._
+  import MetricHelpers._
 
   /**
    * This is the instance of the [[spray.routing.Directive]] that you can use in
@@ -257,7 +266,6 @@ case class CounterMetricByUri(
 
   import CounterMetric._
   import MetricHelpers._
-  import spray.routing.directives.BasicDirectives._
 
   /**
    * This is the instance of the [[spray.routing.Directive]] that you can use in
@@ -340,8 +348,7 @@ sealed trait TimerBase {
  *   The instance of the MetricRegistry in which the timer metric exists.
  */
 case class TimerMetric(timerName: String, metricRegistry: MetricRegistry) extends TimerBase {
-  import spray.routing.directives.BasicDirectives._
-
+  import MetricHelpers._
   /**
    * This is the instance of the [[spray.routing.Directive]] that you can use in
    * your [[spray.routing.Route]].
@@ -365,7 +372,6 @@ case class TimerMetric(timerName: String, metricRegistry: MetricRegistry) extend
  */
 case class TimerMetricByUri(metricRegistry: MetricRegistry) extends TimerBase {
   import MetricHelpers._
-  import spray.routing.directives.BasicDirectives._
 
   /**
    * This is the instance of the [[spray.routing.Directive]] that you can use in
